@@ -1,0 +1,1 @@
+{"statusCode": 200, "headers": {"Content-Type": "application/json"}, "body": "{\"status\": \"ok\", \"message\": \"NotionVoxBot Lambda is running\", \"environment\": \"prod\"}"}

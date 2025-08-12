@@ -98,6 +98,15 @@ resource "aws_lambda_function" "notionvoxbot" {
   ]
 }
 
+# Lambda function permission for Function URL
+resource "aws_lambda_permission" "allow_function_url" {
+  statement_id           = "AllowExecutionFromFunctionURL"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name         = aws_lambda_function.notionvoxbot.function_name
+  principal             = "*"
+  function_url_auth_type = "NONE"
+}
+
 # Lambda Function URL
 resource "aws_lambda_function_url" "notionvoxbot_url" {
   function_name      = aws_lambda_function.notionvoxbot.function_name
@@ -110,6 +119,8 @@ resource "aws_lambda_function_url" "notionvoxbot_url" {
     expose_headers    = ["date", "keep-alive"]
     max_age          = 86400
   }
+  
+  depends_on = [aws_lambda_permission.allow_function_url]
 }
 
 # Environment variables (mark as sensitive)

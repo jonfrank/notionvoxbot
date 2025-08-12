@@ -90,6 +90,9 @@ jobs:
           
           # Import existing Lambda function URL if it exists
           terraform import aws_lambda_function_url.notionvoxbot_url notionvoxbot-prod || echo "Lambda function URL not found or already imported"
+          
+          # Import existing Lambda permission if it exists
+          terraform import aws_lambda_permission.allow_function_url notionvoxbot-prod/AllowExecutionFromFunctionURL || echo "Lambda permission not found or already imported"
         working-directory: terraform
 
       - name: Terraform Plan
