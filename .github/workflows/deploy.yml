@@ -50,13 +50,15 @@ jobs:
 
       - name: Build Lambda layer with dependencies
         run: |
-          # Use the official AWS Lambda Python runtime image to build dependencies
+          # Use Amazon Linux container to build dependencies compatible with Lambda
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
-            public.ecr.aws/lambda/python:3.12 \
+            amazonlinux:2 \
             bash -c "
-              pip install --target /workspace/layer/python -r requirements.txt && \
+              yum update -y && \
+              yum install -y python3 python3-pip && \
+              pip3 install --target /workspace/layer/python -r requirements.txt && \
               find /workspace/layer/python -type d -name '__pycache__' -exec rm -rf {} + || true && \
               find /workspace/layer/python -type d -name '*.dist-info' -exec rm -rf {} + || true && \
               find /workspace/layer/python -type d -name 'tests' -exec rm -rf {} + || true && \
