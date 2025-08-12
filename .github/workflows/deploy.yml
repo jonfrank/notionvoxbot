@@ -69,6 +69,22 @@ jobs:
         run: terraform init
         working-directory: terraform
 
+      - name: Import existing AWS resources (ignore errors)
+        continue-on-error: true
+        run: |
+          # Import existing IAM role
+          terraform import aws_iam_role.lambda_role notionvoxbot-lambda-role || echo "IAM role not found or already imported"
+          
+          # Import existing CloudWatch log group  
+          terraform import aws_cloudwatch_log_group.lambda_logs /aws/lambda/notionvoxbot-prod || echo "Log group not found or already imported"
+          
+          # Import existing Lambda function if it exists
+          terraform import aws_lambda_function.notionvoxbot notionvoxbot-prod || echo "Lambda function not found or already imported"
+          
+          # Import existing Lambda function URL if it exists
+          terraform import aws_lambda_function_url.notionvoxbot_url notionvoxbot-prod || echo "Lambda function URL not found or already imported"
+        working-directory: terraform
+
       - name: Terraform Plan
         run: |
           terraform plan \
