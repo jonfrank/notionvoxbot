@@ -16,7 +16,6 @@ from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from dotenv import load_dotenv
 from openai import OpenAI
-from pydub import AudioSegment
 from notion_client import Client as NotionClient
 
 # Configure logging for Lambda
@@ -37,25 +36,6 @@ class WhisperTranscriber:
         else:
             self.client = OpenAI(api_key=api_key)
     
-    def convert_oga_to_mp3(self, oga_path: Path) -> Path:
-        """Convert OGA file to MP3 format for Whisper API compatibility."""
-        try:
-            # Load the OGA file
-            audio = AudioSegment.from_ogg(oga_path)
-            
-            # Create MP3 filename
-            mp3_path = oga_path.with_suffix('.mp3')
-            
-            # Export as MP3
-            audio.export(mp3_path, format="mp3")
-            
-            logger.info(f"Converted {oga_path} to {mp3_path}")
-            return mp3_path
-            
-        except Exception as e:
-            logger.error(f"Error converting audio file: {e}")
-            raise
-    
     def transcribe_audio(self, audio_path: Path) -> dict:
         """Transcribe audio file using OpenAI Whisper API."""
         if not self.client:
@@ -66,11 +46,7 @@ class WhisperTranscriber:
             }
         
         try:
-            # Convert OGA to MP3 if needed
-            if audio_path.suffix.lower() == '.oga':
-                audio_path = self.convert_oga_to_mp3(audio_path)
-            
-            # Transcribe using Whisper API
+            # Transcribe using Whisper API (directly supports OGA format)
             with open(audio_path, "rb") as audio_file:
                 transcript = self.client.audio.transcriptions.create(
                     model="whisper-1",
@@ -390,7 +366,7 @@ class NotionVoxBot:
                     "• Voice message logging and analysis\n"
                     "• Automatic transcription with OpenAI Whisper\n"
                     "• **AI-generated smart titles using GPT-4o-mini**\n"
-                    "• File conversion (OGA to MP3)\n"
+                    "• Direct OGA audio file processing\n"
                     "• **Full Notion integration with organized data**\n\n"
                     "🚀 Future features:\n"
                     "• Enhanced Notion formatting and organization\n"
