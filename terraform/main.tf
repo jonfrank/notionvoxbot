@@ -73,6 +73,12 @@ data "aws_ecr_repository" "lambda_repo" {
   name = "notionvox"
 }
 
+# Get the latest image details from ECR
+data "aws_ecr_image" "lambda_image" {
+  repository_name = data.aws_ecr_repository.lambda_repo.name
+  image_tag       = "latest"
+}
+
 # Lambda function using container image
 resource "aws_lambda_function" "notionvoxbot" {
   function_name = "${var.project_name}-${var.environment}"
@@ -81,6 +87,9 @@ resource "aws_lambda_function" "notionvoxbot" {
   image_uri    = "${data.aws_ecr_repository.lambda_repo.repository_url}:latest"
   timeout      = 300
   memory_size  = 512
+  
+  # Force update when image changes
+  source_code_hash = data.aws_ecr_image.lambda_image.image_digest
 
   environment {
     variables = {
