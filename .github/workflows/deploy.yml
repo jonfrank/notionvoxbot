@@ -79,20 +79,24 @@ jobs:
           export TF_VAR_notion_database_id="${{ secrets.NOTION_DATABASE_ID }}"
           export TF_VAR_aws_region="${{ env.AWS_REGION }}"
           
-          # Import existing IAM role
-          terraform import aws_iam_role.lambda_role notionvoxbot-lambda-role || echo "IAM role not found or already imported"
+          # Function to safely import resources
+          safe_import() {
+            echo "Trying to import $1..."
+            if terraform import "$1" "$2" 2>/dev/null; then
+              echo "✓ Successfully imported $1"
+            else
+              echo "✗ Failed to import $1 (resource may not exist or already imported)"
+            fi
+          }
           
-          # Import existing CloudWatch log group  
-          terraform import aws_cloudwatch_log_group.lambda_logs /aws/lambda/notionvoxbot-prod || echo "Log group not found or already imported"
+          # Import existing resources
+          safe_import "aws_iam_role.lambda_role" "notionvoxbot-lambda-role"
+          safe_import "aws_cloudwatch_log_group.lambda_logs" "/aws/lambda/notionvoxbot-prod"
+          safe_import "aws_lambda_function.notionvoxbot" "notionvoxbot-prod"
+          safe_import "aws_lambda_function_url.notionvoxbot_url" "notionvoxbot-prod"
+          safe_import "aws_lambda_permission.allow_function_url" "notionvoxbot-prod/AllowExecutionFromFunctionURL"
           
-          # Import existing Lambda function if it exists
-          terraform import aws_lambda_function.notionvoxbot notionvoxbot-prod || echo "Lambda function not found or already imported"
-          
-          # Import existing Lambda function URL if it exists
-          terraform import aws_lambda_function_url.notionvoxbot_url notionvoxbot-prod || echo "Lambda function URL not found or already imported"
-          
-          # Import existing Lambda permission if it exists
-          terraform import aws_lambda_permission.allow_function_url notionvoxbot-prod/AllowExecutionFromFunctionURL || echo "Lambda permission not found or already imported"
+          echo "Import phase completed"
         working-directory: terraform
 
       - name: Terraform Plan
