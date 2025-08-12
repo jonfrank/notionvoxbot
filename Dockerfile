@@ -1,6 +1,11 @@
 # Use the official AWS Lambda Python runtime as base image
 FROM public.ecr.aws/lambda/python:3.12
 
+# Install ffmpeg for audio processing
+RUN dnf update -y && \
+    dnf install -y ffmpeg && \
+    dnf clean all
+
 # Copy requirements first for better caching
 COPY requirements.txt ${LAMBDA_TASK_ROOT}/
 
