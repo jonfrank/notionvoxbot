@@ -72,6 +72,13 @@ jobs:
       - name: Import existing AWS resources (ignore errors)
         continue-on-error: true
         run: |
+          # Set variables for import commands
+          export TF_VAR_telegram_bot_token="${{ secrets.TELEGRAM_BOT_TOKEN }}"
+          export TF_VAR_openai_api_key="${{ secrets.OPENAI_API_KEY }}"
+          export TF_VAR_notion_token="${{ secrets.NOTION_TOKEN }}"
+          export TF_VAR_notion_database_id="${{ secrets.NOTION_DATABASE_ID }}"
+          export TF_VAR_aws_region="${{ env.AWS_REGION }}"
+          
           # Import existing IAM role
           terraform import aws_iam_role.lambda_role notionvoxbot-lambda-role || echo "IAM role not found or already imported"
           
