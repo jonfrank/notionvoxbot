@@ -41,8 +41,14 @@ check_dependencies() {
         exit 1
     fi
     
-    if ! command -v python3 &> /dev/null; then
-        print_error "Python 3 is not installed."
+    if ! command -v docker &> /dev/null; then
+        print_error "Docker is not installed. Please install it first."
+        exit 1
+    fi
+    
+    # Check if Docker is running
+    if ! docker info &> /dev/null; then
+        print_error "Docker is not running. Please start Docker first."
         exit 1
     fi
     
@@ -90,16 +96,39 @@ create_directories() {
 
 # Install Python dependencies
 install_dependencies() {
-    print_status "Installing Python dependencies for Lambda layer..."
+    print_status "Installing Python dependencies for Lambda layer using Docker..."
     
-    pip install --target layer/python -r requirements.txt
+    # Create a temporary Dockerfile for building the layer
+    cat > Dockerfile.lambda-layer << 'EOF'
+FROM public.ecr.aws/lambda/python:3.12
+
+# Copy requirements file
+COPY requirements.txt .
+
+# Install dependencies
+RUN pip install --target /opt/python -r requirements.txt
+
+# Clean up unnecessary files to reduce package size
+RUN find /opt/python -type d -name "__pycache__" -exec rm -rf {} + || true && \
+    find /opt/python -type d -name "*.dist-info" -exec rm -rf {} + || true && \
+    find /opt/python -type d -name "tests" -exec rm -rf {} + || true && \
+    find /opt/python -name "*.pyc" -delete || true
+EOF
     
-    # Remove unnecessary files to reduce package size
-    print_status "Cleaning up unnecessary files..."
-    find layer/python -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-    find layer/python -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
-    find layer/python -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
-    find layer/python -name "*.pyc" -delete 2>/dev/null || true
+    # Build the Docker image
+    print_status "Building Lambda layer with Docker..."
+    docker build -f Dockerfile.lambda-layer -t lambda-layer-builder .
+    
+    # Extract the dependencies from the Docker container
+    print_status "Extracting dependencies from Docker container..."
+    
+    # Create and run a container to copy the files
+    CONTAINER_ID=$(docker create lambda-layer-builder)
+    docker cp "$CONTAINER_ID:/opt/python" layer/
+    docker rm "$CONTAINER_ID"
+    
+    # Clean up the temporary Dockerfile
+    rm Dockerfile.lambda-layer
     
     print_status "Dependencies installed and cleaned ✓"
 }

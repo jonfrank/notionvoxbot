@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
@@ -47,13 +48,20 @@ jobs:
           mkdir -p lambda_package
           mkdir -p layer/python
 
-      - name: Install Python dependencies for Layer
+      - name: Build Lambda layer with dependencies
         run: |
-          pip install --target layer/python -r requirements.txt
-          # Remove unnecessary files to reduce size
-          find layer/python -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-          find layer/python -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
-          find layer/python -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
+          # Use the official AWS Lambda Python runtime image to build dependencies
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace \
+            public.ecr.aws/lambda/python:3.12 \
+            bash -c "
+              pip install --target /workspace/layer/python -r requirements.txt && \
+              find /workspace/layer/python -type d -name '__pycache__' -exec rm -rf {} + || true && \
+              find /workspace/layer/python -type d -name '*.dist-info' -exec rm -rf {} + || true && \
+              find /workspace/layer/python -type d -name 'tests' -exec rm -rf {} + || true && \
+              find /workspace/layer/python -name '*.pyc' -delete || true
+            "
 
       - name: Copy Lambda function code
         run: |
@@ -76,12 +84,12 @@ jobs:
         working-directory: terraform
 
       - name: Terraform Apply (on main branch only)
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         run: terraform apply tfplan
         working-directory: terraform
 
       - name: Get Lambda Function URL
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         run: |
           FUNCTION_URL=$(terraform output -raw lambda_function_url)
           echo "Lambda Function URL: $FUNCTION_URL"
@@ -89,14 +97,14 @@ jobs:
         working-directory: terraform
 
       - name: Set Telegram Webhook (on main branch only)
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         run: |
           curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/setWebhook" \
             -H "Content-Type: application/json" \
             -d '{"url": "'${{ env.LAMBDA_FUNCTION_URL }}'"}'
 
       - name: Test Lambda Function
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         run: |
           curl -X GET "${{ env.LAMBDA_FUNCTION_URL }}" || true
 
