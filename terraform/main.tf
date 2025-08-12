@@ -68,43 +68,19 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
   retention_in_days = 14
 }
 
-# Lambda Layer for dependencies
-resource "aws_lambda_layer_version" "dependencies" {
-  filename         = "../lambda_layer.zip"
-  layer_name       = "${var.project_name}-dependencies"
-  description      = "Dependencies for NotionVoxBot"
-  
-  compatible_runtimes = ["python3.12"]
-  
-  depends_on = [data.archive_file.lambda_layer]
+# Use existing ECR repository
+data "aws_ecr_repository" "lambda_repo" {
+  name = "notionvox"
 }
 
-# Archive for Lambda layer (dependencies)
-data "archive_file" "lambda_layer" {
-  type        = "zip"
-  source_dir  = "../layer"
-  output_path = "../lambda_layer.zip"
-}
-
-# Archive for Lambda function
-data "archive_file" "lambda_zip" {
-  type        = "zip"
-  source_dir  = "../lambda_package"
-  output_path = "../lambda_function.zip"
-}
-
-# Lambda function
+# Lambda function using container image
 resource "aws_lambda_function" "notionvoxbot" {
-  filename         = "../lambda_function.zip"
-  function_name    = "${var.project_name}-${var.environment}"
-  role            = aws_iam_role.lambda_role.arn
-  handler         = "lambda_handler.handler"
-  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  runtime         = "python3.12"
-  timeout         = 300
-  memory_size     = 512
-
-  layers = [aws_lambda_layer_version.dependencies.arn]
+  function_name = "${var.project_name}-${var.environment}"
+  role         = aws_iam_role.lambda_role.arn
+  package_type = "Image"
+  image_uri    = "${data.aws_ecr_repository.lambda_repo.repository_url}:latest"
+  timeout      = 300
+  memory_size  = 512
 
   environment {
     variables = {
@@ -175,4 +151,9 @@ output "lambda_function_name" {
 output "lambda_function_arn" {
   description = "ARN of the Lambda function"
   value       = aws_lambda_function.notionvoxbot.arn
+}
+
+output "ecr_repository_url" {
+  description = "URL of the ECR repository"
+  value       = data.aws_ecr_repository.lambda_repo.repository_url
 }

@@ -43,43 +43,27 @@ jobs:
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
 
-      - name: Create Lambda package directory
+      - name: Build and push Docker image to ECR
         run: |
-          mkdir -p lambda_package
-          mkdir -p layer/python
-
-      - name: Build Lambda layer with dependencies
-        run: |
-          # Use Python 3.12 container to build dependencies, then ensure compatibility
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace \
-            python:3.12-slim \
-            bash -c "
-              apt-get update && \
-              apt-get install -y gcc && \
-              pip install --target /workspace/layer/python -r requirements.txt --no-cache-dir && \
-              find /workspace/layer/python -type d -name '__pycache__' -exec rm -rf {} + || true && \
-              find /workspace/layer/python -type d -name '*.dist-info' -exec rm -rf {} + || true && \
-              find /workspace/layer/python -type d -name 'tests' -exec rm -rf {} + || true && \
-              find /workspace/layer/python -name '*.pyc' -delete || true
-            "
+          # Get AWS account ID
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          ECR_REPOSITORY="notionvox"
+          IMAGE_TAG="latest"
           
-          # Verify that dependencies were installed
-          echo "Checking installed dependencies:"
-          ls -la layer/python/ || echo "Layer directory is empty!"
+          # Login to ECR
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
           
-          # Create a simple test file if directory is empty
-          if [ ! "$(ls -A layer/python)" ]; then
-            echo "Layer directory is empty, creating placeholder"
-            mkdir -p layer/python
-            echo "# Placeholder file to prevent empty archive" > layer/python/__placeholder__.py
-          fi
-
-      - name: Copy Lambda function code
-        run: |
-          cp lambda_handler.py lambda_package/
-          # Copy any other necessary files (excluding large dependencies)
+          # Build Docker image
+          docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
+          
+          # Tag image for ECR
+          docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          
+          # Push image to ECR
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          
+          echo "Docker image pushed successfully to ECR"
 
       - name: Terraform Init
         run: terraform init
