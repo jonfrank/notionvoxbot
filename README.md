@@ -7,7 +7,9 @@ A Telegram bot that receives voice messages, logs their details, and will eventu
 - 🎤 Receives voice messages from Telegram
 - 📊 Logs comprehensive voice message details
 - 💾 Downloads and stores voice files locally
-- 📝 Future: Voice transcription and Notion integration
+- 🤖 **Transcribes voice messages using OpenAI Whisper API**
+- 🔄 Automatically converts OGA to MP3 format
+- 📝 Future: Notion integration for saving transcripts
 
 ## Setup
 
@@ -24,9 +26,10 @@ pip install -r requirements.txt
    cp .env.example .env
    ```
 
-2. Edit `.env` and add your Telegram bot token:
+2. Edit `.env` and add your API tokens:
    ```
    TELEGRAM_BOT_TOKEN=your_actual_bot_token_here
+   OPENAI_API_KEY=your_openai_api_key_here
    ```
 
 ### 3. Run the Bot
@@ -40,15 +43,20 @@ python bot.py
 - `/start` - Welcome message and introduction
 - `/help` - Show available commands and usage instructions
 
-## What the Bot Logs
+## What the Bot Does
 
-When you send a voice message, the bot logs:
+When you send a voice message, the bot:
 
-- User information (ID, name, username)
-- Voice message metadata (duration, file size, MIME type)
-- File IDs (both regular and unique)
-- Timestamp of message
-- Local file path where voice is saved
+1. **Downloads** the voice file to the `downloads/` directory
+2. **Logs** comprehensive details to the console:
+   - User information (ID, name, username)
+   - Voice message metadata (duration, file size, MIME type)
+   - File IDs (both regular and unique)
+   - Timestamp of message
+   - Local file path where voice is saved
+3. **Converts** OGA audio to MP3 format for Whisper compatibility
+4. **Transcribes** the audio using OpenAI Whisper API
+5. **Sends** the transcript back to you in Telegram
 
 ## File Structure
 
@@ -65,11 +73,11 @@ notionvoxbot/
 
 ## Future Enhancements
 
-- 🎯 Voice transcription using OpenAI Whisper or similar
 - 📔 Integration with Notion API
 - 🔄 Database storage for voice message metadata
 - 🎛️ Configuration options for different users
 - 🚀 Deployment options (Docker, cloud platforms)
+- 🌍 Multi-language transcription support
 
 ## Development
 

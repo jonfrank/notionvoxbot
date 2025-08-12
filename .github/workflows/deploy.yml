@@ -1,0 +1,112 @@
+name: Deploy NotionVoxBot to AWS
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  AWS_REGION: us-east-1
+  TERRAFORM_VERSION: 1.6.0
+
+jobs:
+  deploy:
+    name: Deploy to AWS
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Create Lambda package directory
+        run: |
+          mkdir -p lambda_package
+          mkdir -p layer/python
+
+      - name: Install Python dependencies for Layer
+        run: |
+          pip install --target layer/python -r requirements.txt
+          # Remove unnecessary files to reduce size
+          find layer/python -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          find layer/python -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
+          find layer/python -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
+
+      - name: Copy Lambda function code
+        run: |
+          cp lambda_handler.py lambda_package/
+          # Copy any other necessary files (excluding large dependencies)
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: terraform
+
+      - name: Terraform Plan
+        run: |
+          terraform plan \
+            -var="telegram_bot_token=${{ secrets.TELEGRAM_BOT_TOKEN }}" \
+            -var="openai_api_key=${{ secrets.OPENAI_API_KEY }}" \
+            -var="notion_token=${{ secrets.NOTION_TOKEN }}" \
+            -var="notion_database_id=${{ secrets.NOTION_DATABASE_ID }}" \
+            -var="aws_region=${{ env.AWS_REGION }}" \
+            -out=tfplan
+        working-directory: terraform
+
+      - name: Terraform Apply (on main branch only)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform apply tfplan
+        working-directory: terraform
+
+      - name: Get Lambda Function URL
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          FUNCTION_URL=$(terraform output -raw lambda_function_url)
+          echo "Lambda Function URL: $FUNCTION_URL"
+          echo "LAMBDA_FUNCTION_URL=$FUNCTION_URL" >> $GITHUB_ENV
+        working-directory: terraform
+
+      - name: Set Telegram Webhook (on main branch only)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/setWebhook" \
+            -H "Content-Type: application/json" \
+            -d '{"url": "'${{ env.LAMBDA_FUNCTION_URL }}'"}'
+
+      - name: Test Lambda Function
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          curl -X GET "${{ env.LAMBDA_FUNCTION_URL }}" || true
+
+      - name: Cleanup (on failure)
+        if: failure() && github.ref == 'refs/heads/main'
+        run: |
+          terraform destroy -auto-approve \
+            -var="telegram_bot_token=${{ secrets.TELEGRAM_BOT_TOKEN }}" \
+            -var="openai_api_key=${{ secrets.OPENAI_API_KEY }}" \
+            -var="notion_token=${{ secrets.NOTION_TOKEN }}" \
+            -var="notion_database_id=${{ secrets.NOTION_DATABASE_ID }}" \
+            -var="aws_region=${{ env.AWS_REGION }}" || true
+        working-directory: terraform

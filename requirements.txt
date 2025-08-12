@@ -1,2 +1,5 @@
 python-telegram-bot==20.8
 python-dotenv==1.0.0
+openai==1.56.2
+pydub==0.25.1
+notion-client==2.2.1
