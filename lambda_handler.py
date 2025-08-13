@@ -28,8 +28,7 @@ logger = logging.getLogger(__name__)
 # Authorization configuration - Only allow specific user IDs
 # Add your user ID here after first interaction
 ALLOWED_USER_IDS = {
-    # Your user ID will be logged on first interaction - add it here
-    # Example: 123456789  # @stratovate
+    8314097969  # @stratovate
 }
 
 def is_authorized_user(user_id: int, username: str = None) -> bool:
