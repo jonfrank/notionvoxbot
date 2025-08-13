@@ -14,6 +14,7 @@ import base64
 
 from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.request import HTTPXRequest
 from dotenv import load_dotenv
 from openai import OpenAI
 from notion_client import Client as NotionClient
@@ -211,7 +212,19 @@ Title:"""
 
 class NotionVoxBot:
     def __init__(self):
-        self.bot = Bot(token=os.getenv("TELEGRAM_BOT_TOKEN"))
+        # Create custom HTTP client with better settings for Lambda
+        request = HTTPXRequest(
+            connection_pool_size=1,
+            connect_timeout=30.0,
+            read_timeout=30.0,
+            write_timeout=30.0,
+            pool_timeout=30.0
+        )
+        
+        self.bot = Bot(
+            token=os.getenv("TELEGRAM_BOT_TOKEN"),
+            request=request
+        )
         self.transcriber = WhisperTranscriber()
         self.notion = NotionIntegrator()
 
@@ -451,9 +464,6 @@ class NotionVoxBot:
             logger.error(f"Error processing update: {e}")
 
 
-# Initialize bot instance
-bot_instance = NotionVoxBot()
-
 def handler(event, context):
     """Lambda handler function."""
     logger.info("Lambda handler called")
@@ -468,6 +478,9 @@ def handler(event, context):
                 body = event['body']
             
             logger.info(f"Received webhook payload: {json.dumps(body, default=str)}")
+            
+            # Initialize bot instance for each request to avoid connection pool issues
+            bot_instance = NotionVoxBot()
             
             # Process the update asynchronously
             asyncio.run(bot_instance.process_update(body))
