@@ -25,6 +25,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Authorization configuration - Only allow specific user IDs
+# Add your user ID here after first interaction
+ALLOWED_USER_IDS = {
+    # Your user ID will be logged on first interaction - add it here
+    # Example: 123456789  # @stratovate
+}
+
+def is_authorized_user(user_id: int, username: str = None) -> bool:
+    """Check if user is authorized to use the bot."""
+    if user_id in ALLOWED_USER_IDS:
+        return True
+    
+    # Log unauthorized access attempts
+    logger.warning(f"Unauthorized access attempt - User ID: {user_id}, Username: {username}")
+    return False
+
 class WhisperTranscriber:
     """Handles voice transcription using OpenAI Whisper API."""
     
@@ -206,6 +222,14 @@ class NotionVoxBot:
             voice = update.message.voice
             user = update.message.from_user
             
+            # Authorization check
+            if not is_authorized_user(user.id, user.username):
+                await self.bot.send_message(
+                    chat_id=update.message.chat_id,
+                    text="🚫 Unauthorized access. This bot is private."
+                )
+                return
+            
             # Log voice message details
             logger.info(f"Received voice message from {user.first_name} ({user.id})")
             logger.info(f"Voice details: duration={voice.duration}s, file_size={voice.file_size} bytes")
@@ -332,7 +356,30 @@ class NotionVoxBot:
     async def handle_text_message(self, update: Update):
         """Handle text messages (commands)."""
         try:
+            user = update.message.from_user
             text = update.message.text
+            
+            # Special command to help get user ID - bypasses authorization
+            if text == "/myid":
+                logger.info(f"User ID request - User: {user.username or user.first_name}, ID: {user.id}")
+                await self.bot.send_message(
+                    chat_id=update.message.chat_id,
+                    text=f"🆔 **Your Telegram User Info:**\n\n"
+                         f"👤 Name: {user.first_name} {user.last_name or ''}".strip() + "\n"
+                         f"📛 Username: @{user.username or 'None'}\n"
+                         f"🔢 User ID: `{user.id}`\n\n"
+                         f"*Add your User ID to the ALLOWED_USER_IDS set in the code to gain access.*"
+                )
+                return
+            
+            # Authorization check for all other commands
+            if not is_authorized_user(user.id, user.username):
+                await self.bot.send_message(
+                    chat_id=update.message.chat_id,
+                    text="🚫 Unauthorized access. This bot is private.\n\n"
+                         "Use /myid to see your user ID for access."
+                )
+                return
             
             if text == "/start":
                 welcome_message = (
